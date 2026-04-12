@@ -271,7 +271,9 @@ class TestRetrieval(Callback):
                 with environment_variables(TOKENIZERS_PARALLELISM="false"):
                     res = metric(preds, true_sentences)
                 if "bert" in metric_name:
-                    res = torch.mean(res["f1"])
+                    f1 = res["f1"]
+                    f1 = torch.tensor(f1) if not isinstance(f1, torch.Tensor) else f1
+                    res = torch.mean(f1)
                 out[metric_name] = res
 
         return out, true_sentences, pred_sentences, corr_sentences

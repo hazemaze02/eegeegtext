@@ -13,6 +13,10 @@ import lightning.pytorch as pl
 import numpy as np
 import pandas as pd
 import pydantic
+import torch
+# Needed for cross-version checkpoint loading
+_original_load = torch.load
+torch.load = lambda *args, **kwargs: _original_load(*args, **{**kwargs, "weights_only": False})
 import wandb
 import yaml
 from lightning.pytorch.callbacks import (
@@ -455,8 +459,9 @@ class Experiment(pydantic.BaseModel):
         return self._brain_module
 
     def test(self, test_loader: DataLoader):
-        self._trainer.test(self._brain_module, dataloaders=test_loader, ckpt_path="best")
-
+        #self._trainer.test(self._brain_module, dataloaders=test_loader, ckpt_path="best")
+        self._trainer.test(self._brain_module, dataloaders=test_loader, 
+                   ckpt_path="/Users/vivianaseleniahanampa/Columbia/BrainML/project-gh/eegeegtext/neuralset/lightning_logs/version_3/checkpoints/epoch=2-step=18.ckpt")
     def setup_run(self):
         if self.infra.cluster and self.infra.status() != "not submitted":
             for out_type in ["stdout", "stderr"]:
