@@ -6,6 +6,7 @@
 
 import os
 import typing as tp
+import warnings
 from functools import partial
 from pathlib import Path
 
@@ -292,6 +293,16 @@ class Experiment(pydantic.BaseModel):
     project: str
     seed: int = 0
 
+    # ------------------------------------------------------------------
+    # N400 integration flag (Task 2)
+    # ------------------------------------------------------------------
+    # Set use_n400=True to enable N400 + theta feature injection.
+    # Set use_n400=False (default) for the baseline / ablation condition.
+    #
+    # Example override from a grid script:
+    #   config = update_config(default, {"use_n400": True})
+    use_n400: bool = False
+
     # Optim
     trainer_config: TrainerConfig
 
@@ -308,6 +319,7 @@ class Experiment(pydantic.BaseModel):
         transformer: nn.Module,
         best: bool = False,
         target_scaler: StandardScaler = None,
+        channel_names: tp.List[str] | None = None,
     ):
         if self.reload_checkpoint:
             checkpoint_path = self.reload_checkpoint
@@ -323,6 +335,10 @@ class Experiment(pydantic.BaseModel):
             init_fn = BrainModule
             checkpoint_path = None
 
+        # Determine the EEG sampling frequency from the data config so that
+        # BrainModule can correctly convert the N400 time window to samples.
+        eeg_sfreq = getattr(self.data.neuro, "frequency", 50.0)
+
         pl_module = init_fn(
             checkpoint_path=checkpoint_path,
             model=model,
@@ -334,6 +350,10 @@ class Experiment(pydantic.BaseModel):
                 metric.log_name: metric.build() for metric in self.retrieval_metrics
             },
             trainer_config=self.trainer_config,
+            # N400 integration (new parameters — default to False / None / 50 Hz)
+            use_n400=self.use_n400,
+            channel_names=channel_names,
+            eeg_sfreq=float(eeg_sfreq),
         )
         pl_module.checkpoint_path = checkpoint_path
 
@@ -358,6 +378,33 @@ class Experiment(pydantic.BaseModel):
             transformer = None
         return brain_model, transformer
 
+    @staticmethod
+    def _get_channel_names_from_loader(loader: DataLoader) -> tp.List[str] | None:
+        """
+        Attempt to extract EEG channel names from the first batch.
+
+        Channel names are stored in the MNE Raw object used to generate the
+        dataset, but they are not directly attached to the batch tensor.
+        We try to retrieve them from the first segment's feature object.
+
+        Returns a list of strings, or None if extraction fails.
+        The returned list is used by BrainModule to identify centro-parietal
+        channels (Cz, Pz, ...) for N400 extraction.
+        """
+        try:
+            batch = next(iter(loader))
+            # Segments carry the original MNE channel ordering via the neuro feature
+            if hasattr(batch, "segments") and batch.segments:
+                seg = batch.segments[0]
+                # The Eeg feature stores channel names on the raw object;
+                # try to retrieve via the trigger's timeline attribute.
+                if hasattr(seg, "_feature") and hasattr(seg._feature, "ch_names"):
+                    return list(seg._feature.ch_names)
+            return None
+        except Exception as e:
+            warnings.warn(f"[N400] Could not extract channel names from loader: {e}")
+            return None
+
     def fit(
         self,
         train_loader: DataLoader,
@@ -374,8 +421,22 @@ class Experiment(pydantic.BaseModel):
         else:
             target_scaler = None
 
+        # Attempt to get EEG channel names for N400 channel identification.
+        # If None is returned, BrainModule will fall back to using all channels.
+        channel_names = None
+        if self.use_n400:
+            channel_names = self._get_channel_names_from_loader(train_loader)
+            if channel_names is None:
+                print(
+                    "[N400] Channel names could not be retrieved from the dataloader.\n"
+                    "       All EEG channels will be averaged for N400 extraction.\n"
+                    "       To use only centro-parietal channels, set channel_names\n"
+                    "       explicitly on the BrainModule after construction."
+                )
+
         self._brain_module = self.load_module(
-            brain_model, transformer, target_scaler=target_scaler
+            brain_model, transformer, target_scaler=target_scaler,
+            channel_names=channel_names,
         )
 
         if self.use_wandb:
