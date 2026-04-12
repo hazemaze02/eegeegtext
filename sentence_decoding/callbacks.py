@@ -20,6 +20,16 @@ from neuraltrain.metrics import Rank
 from .decoder import Decoder
 from .utils import agg_per_group, agg_retrieval_preds
 
+# NeuroSpeak additions — add these two lines to __init__
+from .llm_reranker import LLMReranker
+from .averaging_oracle import AveragingOracle
+import numpy as np
+
+#self.llm_reranker = LLMReranker(verbose=True)   # needs ANTHROPIC_API_KEY env var
+#self.averaging_oracle = None                     # wire up later if you want it
+
+
+
 
 class InitialEvaluation(Callback):
     """
@@ -231,12 +241,48 @@ class TestRetrieval(Callback):
         pred_sentences, true_sentences, accs, corr_sentences = [], [], [], []
         for sentence_uid in np.unique(sentence_uids):
             idx = np.where(np.array(sentence_uids) == sentence_uid)[0]
+
+            #####
             sentence_scores = scores[idx]
 
             true_sentence = " ".join([true_words[i] for i in idx])
             pred_sentence = " ".join(
                 [agg_groups_true[i] for i in sentence_scores.argmax(dim=1)]
             )
+
+
+            #####
+            
+            #sentence_scores = scores[idx]                    # (n_words_in_sentence, V)
+
+            #true_sentence = " ".join([true_words[i] for i in idx])
+
+            # ── NeuroSpeak: LLM re-ranking ──────────────────────────────────────
+            #if self.llm_reranker is not None:
+            #    TOP_K = 10
+            #    topk_inds = torch.argsort(sentence_scores, dim=1, descending=True)[:, :TOP_K]
+
+                # Build candidate word lists per word position
+            #    context_so_far = ""
+            #    reranked = []
+            #    for w, row in enumerate(topk_inds):
+            #        candidates = [agg_groups_true[ind] for ind in row]
+            #        result = self.llm_reranker.rerank(candidates, extra_context=context_so_far)
+            #        best = result.top1
+            #        reranked.append(best)
+            #        self.llm_reranker.accept(best)
+            #        context_so_far = " ".join(reranked)
+
+            #    self.llm_reranker.reset()
+            #    pred_sentence = " ".join(reranked)
+            #else:
+            #    pred_sentence = " ".join(
+            #        [agg_groups_true[i] for i in sentence_scores.argmax(dim=1)]
+            #    )
+            # ── end patch ────────────────────────────────────────────────────────
+
+
+
             if self.decoder is not None:
                 corr_sentence = (
                     self.decoder.decode(sentence_scores)

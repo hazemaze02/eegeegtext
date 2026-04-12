@@ -1,0 +1,34 @@
+{
+  "top_k_accuracy_with_n400": 0.1,
+  "top_k_accuracy_without_n400": 0.1,
+  "n400_delta": 0.0,
+  "avg_word_accuracy": 0.0,
+  "vocab_size": 66,
+  "n_test_words": 10,
+  "sentences": [
+    {
+      "true": "with a banana he wrote",
+      "predicted": "His cat watered plants too.",
+      "word_acc": 0.0,
+      "n400": [
+        0.5313059687614441,
+        0.38887569308280945,
+        -1.7615898847579956,
+        -0.5115029215812683,
+        1.0832836627960205
+      ]
+    },
+    {
+      "true": "the letter with his elbow",
+      "predicted": "Drove the pizza boy quickly",
+      "word_acc": 0.0,
+      "n400": [
+        1.072763204574585,
+        -0.17680440843105316,
+        0.17524577677249908,
+        0.920971155166626,
+        -1.7225483655929565
+      ]
+    }
+  ]
+}

@@ -91,8 +91,8 @@ default_params = {
     # Disable W&B (no account needed)
     "use_wandb": False,
     # Very short training for smoke-test purposes
-    "trainer_config.n_epochs": 10,
-    "trainer_config.patience": 10,
+    "trainer_config.n_epochs": 3,
+    "trainer_config.patience": 3,
     # Fewer workers — safer on a laptop (increase if you have more cores)
     "data.num_workers": 2,
     # Use the smaller t5-small instead of t5-large (much faster, still valid)
