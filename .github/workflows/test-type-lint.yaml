@@ -1,0 +1,173 @@
+name: Build & run pytest-mypy-linters
+env:
+    IN_GITHUB_ACTION: 1
+
+on: [push]
+
+jobs:
+  run-on-ubuntu:
+    # require 8-core machines (Github Actions Larger Runners) to have more than 14GB disk space
+    runs-on: 8-core-ubuntu  # ubuntu-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # Building/caching the environment
+
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA
+        echo $CONDA/bin >> $GITHUB_PATH
+        echo $CONDA_PREFIX
+
+    - name: Cache conda env
+      id: cache-conda
+      uses: actions/cache@v4
+      env:
+        # change name here (only) to invalidate cache
+        cache-name: cache-conda-env-v0
+      with:
+          key: ${{ env.cache-name }}-${{ hashFiles('neuralset/pyproject.toml') }}-${{ hashFiles('neuraltrain/pyproject.toml') }}
+          path: ./ci_env
+
+    - name: Create conda env
+      run: |
+        # creates the env if it does not exist (not loaded from cache)
+        sudo apt-get update
+        sudo apt-get install ffmpeg
+        if [ ! -d "./ci_env" ]; then \
+          conda create -p ./ci_env python=3.11 ipython -y
+        fi
+
+    - name: Install dependencies
+      run: |
+        source activate ./ci_env
+        cd neuralset
+        which pip
+        pip install --config-settings editable_mode=strict -e .[dev]
+        pip install imageio julius moviepy>=2.0.0 torch torchvision torchaudio soundfile transformers x-transformers scikit-image opencv-python wordfreq spacy nilearn h5py pybids timm Levenshtein  # additional for tests
+        pip install numpy>=2.0.0  # this may have been reverted by additional installs
+        # install third party
+        cd ../third-party/raft
+        pip install -e .
+        cd ../../scratch/jrapin/autoconf  # useful for testing work directory copy
+        pip install -e .
+
+    - name: (neuraltrain) Install dependencies
+      run: |
+        source activate ./ci_env
+        cd neuraltrain
+        pip install -e .[lightning,dev]
+
+    - name: Print installed packages
+      run: |
+        source activate ./ci_env
+        pip freeze
+
+    # start checks
+
+    - name: (neuralset) Run type hint checks with mypy
+      run: |
+        source activate ./ci_env
+        pip show mypy
+        cd neuralset
+        mypy neuralset
+        mypy examples
+
+    - name: (neuraltrain) Run type hint checks with mypy
+      run: |
+        source activate ./ci_env
+        pip show mypy
+        cd neuraltrain
+        mypy neuraltrain
+
+    - name: Restore huggingface/torchub cache dirs
+      # use a different caches to avoid one big cache that may fail if over 10GB
+      id: cache-huggingface
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/huggingface
+          ~/.cache/torch/hub
+        key: huggingface-cache-6
+
+    - name: Restore neuralset cache dir
+      # use a different caches to avoid one big cache that may fail if over 10GB
+      id: cache-neuralset
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/neuralset
+        key: neuralset-cache-5
+
+    - name: Print cache
+      run: |
+          du -h -d 1 ~/.cache/neuralset || true
+          du -h -d 2 ~/.cache/huggingface || true
+          du -h -d 2 ~/.cache/torch || true
+
+    - name: (neuralset) Test with pytest
+      run: |
+        source activate ./ci_env
+        pip show pytest
+        cd neuralset
+        pytest neuralset --durations=10
+
+    - name: (neuraltrain) Test with pytest
+      run: |
+        source activate ./ci_env
+        pip show pytest
+        pytest neuraltrain/neuraltrain --durations=10
+        # Run example project test
+        cd neuraltrain
+        mkdir project_example/cache
+        python -m project_example.grids.test_run
+
+    - name: Test README code blocks
+      run: |
+        source activate ./ci_env
+        cd docs
+        pytest --markdown-docs -m markdown-docs neuralset.md
+        # XXX add same for neuraltrain
+
+    - name: Run basic pylint
+      run: |
+        source activate ./ci_env
+        pip show pylint
+        pylint neuralset/neuralset --disable=all --enable=unused-import,unused-variable,redefined-builtin,used-before-assignment,super-init-not-called,useless-super-delegation,dangerous-default-value,unnecessary-pass,attribute-defined-outside-init
+        pylint neuraltrain/neuraltrain --disable=all --enable=unused-import,unused-variable,redefined-builtin,used-before-assignment,super-init-not-called,useless-super-delegation,dangerous-default-value,unnecessary-pass,attribute-defined-outside-init
+
+    - name: black
+      run: |
+        source activate ./ci_env
+        black --version
+        black -v --check --diff neuralset
+        black -v --check --diff neuraltrain
+
+    - name: isort
+      run: |
+        source activate ./ci_env
+        isort --version
+        isort --check --diff neuralset
+        isort --check --diff neuraltrain
+
+      # TO BE COMPLETELY DEPRECATED?
+      # - name: autoconf
+      #   run: |
+      #     source activate ./ci_env
+      #     cd scratch/jrapin/autoconf
+      #     pip install -e .
+      #     mypy autoconf
+      #     pytest autoconf
+
+    - name: Print cache
+      run: |
+          du -h -d 1 ~/.cache/neuralset || true
+          du -h -d 2 ~/.cache/huggingface || true
