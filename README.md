@@ -42,3 +42,6 @@ python -m sentence_decoding.grids.final
 **7. Monitor training and inspect results**
 
 Head over to *Weights & Biases* to monitor training and inspect results.
+
+## Proposal 
+https://youtu.be/_R3GDVtsI4s
