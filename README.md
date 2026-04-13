@@ -1,3 +1,7 @@
+# NeuroHack
+
+The following repository was cloned from d'Ascoli's article "Towards decoding individual words from non-invasive brain recordings". The repo contains experiments done by team Columbia for the [NeuroHack 2026](https://global-neurohack.github.io) in San Francisco. We experimented with using N400 and theta band signals to track semantic understanding and how those signals can aid the transformer in guessing the next spoken word. We also added an LLM at the end of the pipeline to help modify the sentence into a logical one.
+
 # Sentence decoding
 
 This repository supports the paper "Decoding individual words from non-invasive brain recordings".
